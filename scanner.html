@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Barcode Scanner POS</title>
+    <style>
+        /* CSS สำหรับจัดหน้าจอ */
+        #interactive.viewport { /* สำหรับแสดงภาพจากกล้อง */
+            width: 100%;
+            height: 300px;
+            margin: 0 auto;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>สแกนบาร์โค้ด</h1>
+    
+    <div id="interactive" class="viewport"></div>
+
+    <div id="result">
+        <p>ผลการสแกนจะปรากฏที่นี่...</p>
+    </div>
+
+    <script>
+        // โค้ด JavaScript ทั้งหมดต้องอยู่ในแท็ก <script>
+        
+        // ** 1. Apps Script URL **
+        // ตรวจสอบให้แน่ใจว่า URL อยู่ในเครื่องหมายคำพูดเดี่ยวหรือคู่ ('...')
+        const GOOGLE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw5XuwOVJO5-oE11hYe9SZBDwLGmigS-Q8uRBcSu07hyr53HgQE4pDFysP0jU9jPkPR/exec'; 
+        
+        // ** 2. ฟังก์ชัน Lookup **
+        function lookupBarcode(scannedBarcode) { 
+            // 1. สร้าง URL สำหรับเรียก Apps Script API
+            const fullUrl = `${GOOGLE_APP_SCRIPT_URL}?barcode=${scannedBarcode}`;
+            
+            console.log(`Searching for barcode: ${scannedBarcode}`);
+            document.getElementById('result').innerHTML = `<p>กำลังค้นหาบาร์โค้ด: ${scannedBarcode}...</p>`;
+
+            // 2. เรียกใช้ API (ใช้ Fetch API)
+            fetch(fullUrl)
+                .then(response => response.json())
+                .then(data => { 
+                    // 3. จัดการผลลัพธ์
+                    if (data.success) { 
+                        const product = data.data;
+                        
+                        // อัปเดตผลลัพธ์บนหน้าจอ
+                        document.getElementById('result').innerHTML = 
+                            `<h2>✅ สินค้าที่พบ:</h2>
+                             <p><strong>ชื่อ:</strong> ${product.name}</p>
+                             <p><strong>ราคา:</strong> ${product.price} บาท</p>`;
+
+                        // alert(`สินค้า: ${product.name}\nราคา: ${product.price} บาท`); 
+                    } else { 
+                        console.error('Product not found or error:', data.message);
+                        document.getElementById('result').innerHTML = 
+                            `<h2>❌ ไม่พบสินค้า:</h2>
+                             <p>บาร์โค้ด: ${scannedBarcode}</p>
+                             <p>กรุณากรอกข้อมูลสินค้าใหม่</p>`;
+                    } 
+                })
+                .catch(error => { 
+                    console.error('Error fetching data:', error);
+                    document.getElementById('result').innerHTML = `<p style="color:red;">เกิดข้อผิดพลาดในการเชื่อมต่อระบบ!</p>`;
+                }); 
+        } 
+
+        // ** 3. โค้ดสำหรับเริ่มต้น QuaggaJS **
+        // *** สำคัญ: โค้ดส่วนนี้เป็นส่วนที่ซับซ้อนที่สุด และต้องใช้เพื่อเข้าถึงกล้องและสแกนจริง ***
+        // เมื่อสแกนได้แล้ว QuaggaJS จะเรียก lookupBarcode() โดยอัตโนมัติ
+
+        // *** ตัวอย่างสมมติว่าสแกนได้บาร์โค้ด 8850006320017 (เพื่อทดสอบ API) ***
+        // เมื่อคุณติดตั้ง QuaggaJS เสร็จแล้ว ค่อยลบโค้ดทดสอบนี้ออก
+        // window.onload = function() {
+        //     // ทดสอบการเรียก API ด้วยบาร์โค้ดสมมติ
+        //     lookupBarcode('8850006320017'); 
+        // };
+
+        // ** (พื้นที่สำหรับโค้ด QuaggaJS ที่ใช้กล้องมือถือสแกนจริง) **
+        // โค้ดนี้จะใช้ Quagga.init() และ Quagga.onDetected() เพื่อเรียกใช้ lookupBarcode(code)
+// ** 4. โค้ดสำหรับเริ่มต้นและใช้งาน QuaggaJS **
+
+function startScanner() {
+    Quagga.init({
+        inputStream : {
+            name : "Live",
+            type : "LiveStream",
+            target: document.querySelector('#interactive'), // เลือก element ที่จะแสดงภาพกล้อง
+            constraints: {
+                width: 640,
+                height: 480,
+                facingMode: "environment" // ใช้กล้องหลังของมือถือ
+            },
+        },
+        decoder : {
+            readers : ["ean_reader", "ean_8_reader", "upc_reader", "upc_e_reader"] // กำหนดชนิดบาร์โค้ดที่ต้องการสแกน
+        }
+    }, function(err) {
+        if (err) {
+            console.error(err);
+            document.getElementById('result').innerHTML = `<p style="color:red;">ไม่สามารถเปิดกล้องได้: ${err.message}</p>`;
+            return
+        }
+        console.log("QuaggaJS initialization finished. Ready to start.");
+        Quagga.start();
+    });
+}
+
+// 5. เมื่อตรวจพบ (Detected) บาร์โค้ด
+Quagga.onDetected(function(result) {
+    // หยุดสแกนชั่วคราวเพื่อป้องกันการสแกนซ้ำหลายครั้ง
+    Quagga.stop(); 
+    
+    // ดึงค่าบาร์โค้ดที่ถอดรหัสได้
+    const code = result.codeResult.code;
+    
+    // เรียกฟังก์ชันค้นหาสินค้าที่เราสร้างไว้
+    lookupBarcode(code); 
+    
+    // ** เมื่อ Lookup เสร็จแล้ว คุณอาจต้องเรียก Quagga.start() อีกครั้งเพื่อให้สแกนต่อได้ **
+    // (ตอนนี้เราตั้งให้มันหยุดรอการ Lookup ก่อน)
+});
+
+// 6. เริ่มต้นสแกนเมื่อหน้าเว็บโหลดเสร็จ
+window.onload = function() {
+    // แทนที่โค้ดทดสอบ (ถ้าคุณเคยใส่ไว้) ด้วยการเรียก startScanner()
+    startScanner(); 
+};
+    
+    </script>
+</body>
+</html>
